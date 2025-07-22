@@ -110,7 +110,7 @@
                 const statusData = await statusResponse.json();
                 
                 // 2. Transformer la liste des statuts en un objet pour un accès rapide
-                const statusMap = new Map(statusData.map(station => [station.station_id, station]));
+                const statusMap = new Map(statusData.data.stations.map(station => [station.station_id, station]));
                 
                 // 3. Filtrer les stations d'information pour ne garder que les vôtres
                 const targetStationsInfo = infoData.data.stations.filter(station => VOS_STATIONS_IDS.includes(station.station_id));
