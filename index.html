@@ -92,4 +92,110 @@ button {
 
 <div id="loader" class="loader"><p>Recherche des vélos...</p></div>
 <div id="container" class="container"></div>
-<div id="error" class
+<div id="error" class="error" style="display:none;">
+<p>Impossible de charger les données.</p>
+<button onclick="fetchVelovData()">Réessayer</button>
+</div>
+
+<script>
+// --- CONFIGURATION ---
+const MAISON_IDS = ["6006", "6021", "6020", "6007", "6003"];
+const TRAVAIL_IDS = ["3066", "3067", "3103"];
+
+const URL_INFO = "https://download.data.grandlyon.com/files/rdata/jcd_jcdecaux.jcdvelov/station_information.json";
+const URL_STATUS = "https://download.data.grandlyon.com/files/rdata/jcd_jcdecaux.jcdvelov/station_status.json";
+
+const containerDiv = document.getElementById('container');
+const loaderDiv = document.getElementById('loader');
+const errorDiv = document.getElementById('error');
+
+async function fetchVelovData() {
+    loaderDiv.style.display = 'block';
+    errorDiv.style.display = 'none';
+    containerDiv.innerHTML = '';
+
+    try {
+        const [infoResponse, statusResponse] = await Promise.all([
+            fetch(URL_INFO),
+            fetch(URL_STATUS)
+        ]);
+
+        if (!infoResponse.ok || !statusResponse.ok) {
+            throw new Error("Une des URLs n'a pas pu être chargée.");
+        }
+
+        const infoData = await infoResponse.json();
+        const statusData = await statusResponse.json();
+
+        const statusMap = new Map(statusData.data.stations.map(station => [station.station_id, station]));
+
+        const infoMap = new Map(infoData.data.stations.map(station => [station.station_id, station]));
+
+        displaySection("Maison", MAISON_IDS, infoMap, statusMap);
+        displaySection("Travail", TRAVAIL_IDS, infoMap, statusMap);
+
+        loaderDiv.style.display = 'none';
+
+    } catch (err) {
+        console.error("Erreur lors de la récupération des données:", err);
+        loaderDiv.style.display = 'none';
+        errorDiv.style.display = 'block';
+    }
+}
+
+function displaySection(title, stationIds, infoMap, statusMap) {
+    const sectionDiv = document.createElement('div');
+    sectionDiv.className = 'section';
+    sectionDiv.innerHTML = `<div class="section-title">${title}</div>`;
+    
+    stationIds.forEach(id => {
+        const info = infoMap.get(id);
+        const status = statusMap.get(id);
+
+        if (!info || !status) return;
+
+        let mechanicalBikes = 0;
+        let electricalBikes = 0;
+
+        status.vehicle_types_available.forEach(v_type => {
+            if (v_type.vehicle_type_id === 'mechanical') mechanicalBikes = v_type.count;
+            if (v_type.vehicle_type_id === 'electrical') electricalBikes = v_type.count;
+        });
+
+        const stationDiv = document.createElement('div');
+        stationDiv.className = 'station';
+        stationDiv.innerHTML = `
+            <div class="station-name">${info.name}</div>
+            <div class="station-info">
+                <div class="info-item">
+                    🚲 ${mechanicalBikes} ${getIndicator(mechanicalBikes)}
+                    <span>Mécaniques</span>
+                </div>
+                <div class="info-item">
+                    ⚡ ${electricalBikes}
+                    <span>Électriques</span>
+                </div>
+                <div class="info-item">
+                    🅿️ ${status.num_docks_available} ${getIndicator(status.num_docks_available)}
+                    <span>Places</span>
+                </div>
+            </div>
+        `;
+        sectionDiv.appendChild(stationDiv);
+    });
+
+    containerDiv.appendChild(sectionDiv);
+}
+
+function getIndicator(value) {
+    let cls = 'red';
+    if (value > 2) cls = 'green';
+    else if (value >=1) cls = 'orange';
+    return `<span class="indicator ${cls}"></span>`;
+}
+
+document.addEventListener('DOMContentLoaded', fetchVelovData);
+</script>
+
+</body>
+</html>
