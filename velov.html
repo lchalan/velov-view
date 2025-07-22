@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dispo Vélo'v</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0; 
+            background-color: #f0f2f5;
+        }
+        .header {
+            background-color: #c00a1f; /* Rouge Vélo'v */
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 1.5em;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .container {
+            padding: 15px;
+        }
+        .station {
+            background-color: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .station-name {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+        .station-info {
+            display: flex;
+            justify-content: space-around;
+            gap: 10px;
+            font-size: 1.2em;
+            text-align: center;
+        }
+        .info-item span {
+            display: block;
+            font-size: 0.6em;
+            color: #666;
+        }
+        .loader, .error {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+            color: #888;
+        }
+        button {
+            display: block;
+            width: 80%;
+            margin: 20px auto;
+            padding: 15px;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: white;
+            background-color: #c00a1f;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">Disponibilité Vélo'v</div>
+
+    <div id="loader" class="loader"><p>Recherche des vélos...</p></div>
+    <div id="container" class="container"></div>
+    <div id="error" class="error" style="display:none;">
+        <p>Impossible de charger les données.</p>
+        <button onclick="fetchVelovData()">Réessayer</button>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        // Mettez ici les numéros (en chaîne de caractères) des stations qui vous intéressent.
+        const VOS_STATIONS_IDS = ["6006", "6021", "6007", "6003"];
+
+        // URLs des données Grand Lyon
+        const URL_INFO = "https://download.data.grandlyon.com/files/rdata/jcd_jcdecaux.jcdvelov/station_information.json";
+        const URL_STATUS = "https://download.data.grandlyon.com/files/rdata/jcd_jcdecaux.jcdvelov/station_status.json";
+
+        const containerDiv = document.getElementById('container');
+        const loaderDiv = document.getElementById('loader');
+        const errorDiv = document.getElementById('error');
+
+        async function fetchVelovData() {
+            loaderDiv.style.display = 'block';
+            errorDiv.style.display = 'none';
+            containerDiv.innerHTML = '';
+
+            try {
+                // 1. Lancer les deux requêtes en parallèle pour gagner du temps
+                const [infoResponse, statusResponse] = await Promise.all([
+                    fetch(URL_INFO),
+                    fetch(URL_STATUS)
+                ]);
+
+                if (!infoResponse.ok || !statusResponse.ok) {
+                    throw new Error("Une des URLs n'a pas pu être chargée.");
+                }
+
+                const infoData = await infoResponse.json();
+                const statusData = await statusResponse.json();
+                
+                // 2. Transformer la liste des statuts en un objet pour un accès rapide
+                const statusMap = new Map(statusData.map(station => [station.station_id, station]));
+                
+                // 3. Filtrer les stations d'information pour ne garder que les vôtres
+                const targetStationsInfo = infoData.data.stations.filter(station => VOS_STATIONS_IDS.includes(station.station_id));
+
+                displayStations(targetStationsInfo, statusMap);
+
+            } catch (err) {
+                console.error("Erreur lors de la récupération des données:", err);
+                loaderDiv.style.display = 'none';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        function displayStations(stationsInfo, statusMap) {
+            loaderDiv.style.display = 'none';
+            
+            if (stationsInfo.length === 0) {
+                 containerDiv.innerHTML = `<p style="text-align:center;">Aucune des stations spécifiées n'a été trouvée.</p>`;
+                 return;
+            }
+
+            // Pour chaque station que l'on cible, on affiche ses infos et son statut
+            stationsInfo.forEach(info => {
+                const status = statusMap.get(info.station_id);
+                if (!status) return; // Si la station n'a pas de statut, on ne l'affiche pas
+
+                let mechanicalBikes = 0;
+                let electricalBikes = 0;
+
+                // Extraction des types de vélos comme dans votre script
+                status.vehicle_types_available.forEach(v_type => {
+                    if (v_type.vehicle_type_id === 'mechanical') mechanicalBikes = v_type.count;
+                    if (v_type.vehicle_type_id === 'electrical') electricalBikes = v_type.count;
+                });
+
+                const stationDiv = document.createElement('div');
+                stationDiv.className = 'station';
+                stationDiv.innerHTML = `
+                    <div class="station-name">${info.name}</div>
+                    <div class="station-info">
+                        <div class="info-item">
+                            🚲 ${mechanicalBikes}
+                            <span>Mécaniques</span>
+                        </div>
+                        <div class="info-item">
+                            ⚡ ${electricalBikes}
+                            <span>Électriques</span>
+                        </div>
+                        <div class="info-item">
+                            🅿️ ${status.num_docks_available}
+                            <span>Places</span>
+                        </div>
+                    </div>
+                `;
+                containerDiv.appendChild(stationDiv);
+            });
+        }
+
+        // Lancer la recherche au chargement de la page
+        document.addEventListener('DOMContentLoaded', fetchVelovData);
+    </script>
+
+</body>
+</html>
