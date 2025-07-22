@@ -108,6 +108,7 @@
 
                 const infoData = await infoResponse.json();
                 const statusData = await statusResponse.json();
+                console.log("statusData:", statusData);
                 
                 // 2. Transformer la liste des statuts en un objet pour un accès rapide
                 const statusMap = new Map(statusData.data.stations.map(station => [station.station_id, station]));
